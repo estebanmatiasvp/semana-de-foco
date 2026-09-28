@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Semana de Foco</title>
+<meta name="description" content="Cronómetro de trabajo con modo foco y horas efectivas por semana.">
+<meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#18181b" media="(prefers-color-scheme: dark)">
+<!-- Instalable: abre sin barras del navegador desde la pantalla de inicio -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Foco">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+  /* Marca @esteban.mvp: 80% negro/blanco, gris para jerarquía, azul solo para la acción principal */
+  :root {
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --surface-2: #f4f4f5;
+    --line: #e4e4e7;
+    --text: #18181b;
+    --text-2: #3f3f46;
+    --muted: #71717a;
+    --faint: #a1a1aa;
+    --bar: #3f3f46;
+    --accent: #2563eb;
+    --accent-text: #2563eb;
+    --on-accent: #ffffff;
+    --danger: #dc2626;
+    --night: #18181b;
+    --night-2: #27272a;
+    --night-text: #fafafa;
+    --night-muted: #71717a;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --font: "Plus Jakarta Sans", "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #18181b; --surface: #202023; --surface-2: #27272a; --line: #2e2e33;
+      --text: #fafafa; --text-2: #d4d4d8; --muted: #a1a1aa; --faint: #71717a;
+      --bar: #a1a1aa; --accent-text: #60a5fa; --danger: #f87171;
+      --night: #111113; --night-2: #232326;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #18181b; --surface: #202023; --surface-2: #27272a; --line: #2e2e33;
+    --text: #fafafa; --text-2: #d4d4d8; --muted: #a1a1aa; --faint: #71717a;
+    --bar: #a1a1aa; --accent-text: #60a5fa; --danger: #f87171;
+    --night: #111113; --night-2: #232326;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; background: var(--bg); }
+  body { min-height: 100dvh; overscroll-behavior-y: none;
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 15px;
+    font-weight: 500; line-height: 1.5; -webkit-tap-highlight-color: transparent; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; touch-action: manipulation; }
+  button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* Todo lo que se presiona responde al instante (pointer-down) */
+  .press { transition: transform 140ms var(--ease-out); }
+  .press:active { transform: scale(0.97); }
+
+  .app { max-width: 520px; margin: 0 auto; padding: 20px 16px 48px; display: flex; flex-direction: column; gap: 24px; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .brand { font-weight: 800; letter-spacing: -0.01em; }
+  .date { color: var(--muted); font-size: 13px; }
+
+  /* Resumen semanal */
+  .week { display: flex; flex-direction: column; gap: 12px; }
+  .eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+  .total { font-weight: 800; font-size: clamp(56px, 18vw, 84px); line-height: 1; letter-spacing: -0.04em; }
+  .total small { font-size: .38em; font-weight: 700; color: var(--faint); letter-spacing: 0; margin: 0 .18em 0 .06em; }
+  .meter { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+  .meter > div { height: 100%; width: 100%; background: var(--text); border-radius: 99px; transform-origin: left;
+    transform: scaleX(0); transition: transform 500ms var(--ease-out); }
+  .facts { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); }
+  .facts b { color: var(--text); font-weight: 700; }
+
+  /* Única acción en azul */
+  .go { width: 100%; border: 0; border-radius: 18px; background: var(--accent); color: var(--on-accent);
+    padding: 20px 22px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+  .go small { font-size: 13px; font-weight: 500; opacity: .8; letter-spacing: 0; }
+  .go-label { display: flex; align-items: center; gap: 12px; }
+  .go-dot { width: 12px; height: 12px; border-radius: 50%; background: currentColor; flex: none; }
+  @media (hover: hover) and (pointer: fine) {
+    .go { transition: transform 140ms var(--ease-out), background-color 150ms ease; }
+    .go:hover { background: #1d4ed8; }
+  }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+  .section-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+  .brand { font-size: 15px; margin: 0; }
+
+  /* Días */
+  .days-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 14px 16px 0; }
+  .nav { display: flex; gap: 4px; }
+  .nav button { background: var(--surface-2); border: 0; border-radius: 10px; min-width: 38px; height: 34px;
+    padding: 0 10px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .nav button:disabled { opacity: .35; cursor: default; transform: none; }
+  .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; padding: 16px 12px 14px; }
+  .day { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+  .bar { width: 100%; max-width: 32px; height: 112px; background: var(--surface-2); border-radius: 8px; overflow: hidden;
+    display: flex; align-items: flex-end; }
+  .bar > div { width: 100%; height: 100%; background: var(--bar); border-radius: 6px; transform-origin: bottom;
+    transition: transform 500ms var(--ease-out); }
+  .day.today .bar > div { background: var(--accent); }
+  .dval { font-size: 10.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  .dname { font-size: 11px; font-weight: 600; color: var(--faint); }
+  .day.today .dname { color: var(--accent-text); font-weight: 800; }
+
+  /* Sesiones */
+  .list-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .list-head span { font-size: 13px; color: var(--muted); }
+  .sessions { display: flex; flex-direction: column; overflow: hidden; }
+  .row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px;
+    padding: 12px 12px 12px 16px; border-top: 1px solid var(--line); font-size: 14px; }
+  .row:first-child { border-top: 0; }
+  .when { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .when span:first-child { font-weight: 600; }
+  .when span:last-child { color: var(--muted); font-size: 12.5px; }
+  .dur { font-weight: 700; }
+  /* Mantener presionado para eliminar: lento al decidir, rápido al soltar */
+  .del { position: relative; overflow: hidden; background: var(--surface-2); border: 0; border-radius: 10px;
+    min-height: 40px; padding: 0 12px; font-size: 12px; font-weight: 600; color: var(--muted);
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .del .fill { position: absolute; inset: 0; background: var(--danger); color: #fff; display: grid; place-items: center;
+    clip-path: inset(0 100% 0 0); transition: clip-path 200ms var(--ease-out); }
+  .del.holding .fill { clip-path: inset(0 0 0 0); transition: clip-path 900ms linear; }
+  .empty { padding: 22px 16px; color: var(--muted); font-size: 14px; text-align: center; }
+
+  details { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
+  summary { padding: 14px 16px; font-size: 14px; font-weight: 700; cursor: pointer; list-style: none;
+    display: flex; justify-content: space-between; align-items: center; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: ""; width: 8px; height: 8px; border-right: 2px solid var(--faint); border-bottom: 2px solid var(--faint);
+    transform: rotate(45deg) translateY(-2px); transition: transform 200ms var(--ease-out); }
+  details[open] summary::after { transform: rotate(-135deg) translateY(-2px); }
+  .form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 16px 16px; font-size: 14px; color: var(--text-2); }
+  .form input { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px;
+    min-width: 0; font-weight: 600; color: var(--text); }
+  .form input[type=date] { flex: 1 1 100%; }
+  .form input[type=time] { flex: 1 1 0; }
+  .form input[type=number] { width: 84px; }
+  .btn { background: var(--text); color: var(--bg); border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 700; }
+  .hint { color: var(--muted); font-size: 12.5px; padding: 0 16px 16px; margin: -6px 0 0; }
+
+  @media (hover: hover) and (pointer: fine) {
+    .nav button, .btn, .del, .ghost, .stop { transition: transform 140ms var(--ease-out), background-color 150ms ease, color 150ms ease; }
+    .nav button:not(:disabled):hover, .del:hover { background: var(--line); color: var(--text); }
+    .btn:hover { background: var(--text-2); }
+    .ghost:hover { background: #303034; color: var(--night-text); }
+    .stop:hover { background: #e4e4e7; }
+  }
+  body.locked { overflow: hidden; }
+
+  .toast { position: fixed; display: flex; align-items: center; gap: 12px; left: 16px; right: 16px; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    margin: 0 auto; width: fit-content; max-width: calc(100% - 32px);
+    background: var(--text); color: var(--bg); padding: 11px 16px; border-radius: 12px; font-size: 13px; font-weight: 600;
+    z-index: 30; opacity: 1; transform: translateY(0);
+    transition: opacity 240ms var(--ease-out), transform 240ms var(--ease-out); }
+  @starting-style { .toast { opacity: 0; transform: translateY(12px); } }
+  .toast button { background: none; border: 0; padding: 4px 2px; font-weight: 800; color: #60a5fa; }
+
+  /* Modo foco: el negro de la marca, sin nada que distraiga */
+  .focus { position: fixed; inset: 0; z-index: 20; background: var(--night); color: var(--night-text);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    padding: calc(24px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+    text-align: center; user-select: none; -webkit-user-select: none; overscroll-behavior: contain; touch-action: none;
+    opacity: 1; transform: scale(1); transition: opacity 320ms var(--ease-out), transform 320ms var(--ease-out); }
+  @starting-style { .focus { opacity: 0; transform: scale(0.98); } }
+  .focus.idle { cursor: none; }
+  .f-state { font-size: 12px; font-weight: 700; letter-spacing: .3em; text-transform: uppercase; color: var(--night-muted);
+    display: flex; align-items: center; gap: 10px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .f-time { font-weight: 700; font-variant-numeric: tabular-nums; font-size: min(18vw, 28vh, 188px);
+    line-height: 1; letter-spacing: -0.045em; }
+  .f-week { color: var(--night-muted); font-size: 15px; }
+  .f-week b { color: var(--night-text); font-weight: 700; }
+  .f-controls { position: absolute; left: 0; right: 0; bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+    display: flex; justify-content: center; gap: 10px; padding: 0 16px;
+    transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
+  .f-tip { position: absolute; top: calc(18px + env(safe-area-inset-top, 0px)); left: 16px; right: 16px;
+    font-size: 12px; color: #52525b; transition: opacity 200ms var(--ease-out); }
+  .f-top { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: 12px;
+    transition: opacity 200ms var(--ease-out); }
+  .focus.idle .f-controls { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  .focus.idle .f-tip, .focus.idle .f-top { opacity: 0; pointer-events: none; }
+  .f-time { transition: opacity 200ms var(--ease-out); }
+  .f-pause { color: var(--night-muted); font-size: 15px; font-weight: 600; }
+  /* En pausa: el tiempo trabajado se atenúa y los controles no se esconden */
+  .focus.paused .f-time { opacity: .4; }
+  .focus.paused .dot { background: var(--night-muted); }
+  .stop { background: var(--night-text); color: var(--night); border: 0; border-radius: 999px;
+    padding: 15px 28px; font-size: 16px; font-weight: 700; }
+  .resume { background: var(--accent); color: #fff; border: 0; border-radius: 999px;
+    padding: 15px 32px; font-size: 16px; font-weight: 700; }
+  .ghost { background: var(--night-2); color: #d4d4d8; border: 0; border-radius: 999px; padding: 15px 24px; font-size: 16px; font-weight: 600; }
+  .ghost.small { padding: 10px 14px; font-size: 13px; color: #a1a1aa; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .press:active { transform: none; }
+    .focus, .toast { transform: none !important; }
+    .focus.idle .f-controls { transform: none; }
+    .bar > div, .meter > div { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="top">
+    <h1 class="brand">Semana de Foco</h1>
+    <span class="date" id="today"></span>
+  </div>
+
+  <section class="week" aria-label="Resumen de la semana">
+    <span class="eyebrow">Horas efectivas esta semana</span>
+    <div class="total num" id="total">0<small>h</small>00<small>m</small></div>
+    <div class="meter"><div id="meter"></div></div>
+    <div class="facts">
+      <span id="goalFact"></span>
+      <span id="vsFact"></span>
+      <span id="avgFact"></span>
+    </div>
+  </section>
+
+  <button class="go press" id="go">
+    <span class="go-label"><span class="go-dot" aria-hidden="true"></span>Empezar a trabajar</span>
+    <small>modo foco</small>
+  </button>
+
+  <div class="card">
+    <div class="days-head">
+      <h2 class="section-title num" id="rangeTitle">Semana</h2>
+      <div class="nav">
+        <button class="press" id="prev" aria-label="Semana anterior">←</button>
+        <button class="press" id="now">Hoy</button>
+        <button class="press" id="next" aria-label="Semana siguiente">→</button>
+      </div>
+    </div>
+    <div class="days" id="days"></div>
+  </div>
+
+  <div class="list-head">
+    <h2 class="section-title">Sesiones</h2>
+    <span id="count"></span>
+  </div>
+  <div class="card sessions" id="sessions"></div>
+
+  <details>
+    <summary>Agregar sesión olvidada</summary>
+    <form class="form" id="manual">
+      <input type="date" id="mDate" name="fecha" autocomplete="off" required aria-label="Fecha">
+      <input type="time" id="mStart" name="inicio" autocomplete="off" required aria-label="Hora de inicio">
+      <span aria-hidden="true">a</span>
+      <input type="time" id="mEnd" name="termino" autocomplete="off" required aria-label="Hora de término">
+      <button class="btn press" type="submit">Agregar</button>
+    </form>
+  </details>
+
+  <details>
+    <summary>Meta semanal</summary>
+    <form class="form" id="goalForm">
+      <input type="number" id="goal" name="meta" autocomplete="off" inputmode="numeric" min="1" max="100" step="1" aria-label="Horas de meta"> <span>horas por semana</span>
+      <button class="btn press" type="submit">Guardar</button>
+    </form>
+  </details>
+
+  <details>
+    <summary>Respaldo de datos</summary>
+    <div class="form">
+      <button class="btn press" type="button" id="exportBtn">Descargar respaldo</button>
+      <button class="btn press" type="button" id="importBtn">Restaurar respaldo</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
+    <p class="hint" id="storeHint"></p>
+    <div class="form" id="confirmImport" hidden>
+      <span id="confirmText"></span>
+      <button class="btn press" type="button" id="confirmYes">Reemplazar</button>
+      <button class="btn press" type="button" id="confirmNo">Cancelar</button>
+    </div>
+  </details>
+</div>
+
+<div class="focus" id="focus" role="dialog" aria-modal="true" aria-label="Modo foco" hidden>
+  <div class="f-tip">Toca la pantalla para ver los controles</div>
+  <div class="f-top"><button class="ghost small press" id="fs">Pantalla completa</button></div>
+  <div class="f-state"><span class="dot" aria-hidden="true"></span><span id="fState">Trabajando</span></div>
+  <div class="f-time" id="fTime">00:00:00</div>
+  <div class="f-pause num" id="fPause" hidden></div>
+  <div class="f-week">Esta semana: <b class="num" id="fWeek">0h 00m</b></div>
+  <div class="f-controls">
+    <button class="ghost press" id="pause">Pausar</button>
+    <button class="resume press" id="resume" hidden>Reanudar</button>
+    <button class="stop press" id="stop">Terminar</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  const DAY = 86400000;
+  const MIN_SESSION = 5000;          // un toque por error no cuenta
+  const HOLD_MS = 900;               // mantener presionado para eliminar
+  const LS_KEY = 'semana-de-foco.v1';
+  const $ = id => document.getElementById(id);
+
+  // ---------- Estado ----------
+  // Cada sesión guarda sus tramos de trabajo real; las pausas quedan fuera del conteo.
+  // weeks: { "2026-09-28": [{id, start, end, segments: [[ini, fin], ...], manual?}] }  (clave = lunes)
+  // timer: tramos ya cerrados de la sesión en curso + el tramo que está corriendo (o la pausa)
+  const emptyTimer = () => ({ running: null, segments: [], pauseStart: null });
+  const store = { weeks: {}, timer: { ...emptyTimer(), goalHours: 30 } };
+  let weekOffset = 0;
+  let idleTimer = null;
+  let wakeLock = null;
+  let holdTimer = null;
+
+  // ---------- Fechas ----------
+  const pad = n => String(n).padStart(2, '0');
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  function mondayOf(t) {
+    const d = new Date(t); d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+    return d;
+  }
+  const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const weekKey = t => { const d = mondayOf(t); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const overlap = (s, e, a, b) => Math.max(0, Math.min(e, b) - Math.max(s, a));
+
+  const segsOf = s => (Array.isArray(s.segments) && s.segments.length ? s.segments : [[s.start, s.end]]);
+  const worked = s => segsOf(s).reduce((acc, [a, b]) => acc + (b - a), 0);
+  const allSessions = () => Object.values(store.weeks).flat();
+  const active = () => !!store.timer.running || store.timer.segments.length > 0;
+  const paused = () => !store.timer.running && store.timer.segments.length > 0;
+
+  // Todo lo trabajado dentro de [a, b): sesiones guardadas + la sesión en curso
+  function workedBetween(a, b) {
+    const segs = allSessions().flatMap(segsOf).concat(store.timer.segments);
+    if (store.timer.running) segs.push([store.timer.running, Date.now()]);
+    return segs.reduce((acc, [s, e]) => acc + overlap(s, e, a, b), 0);
+  }
+  function currentElapsed() {
+    const done = store.timer.segments.reduce((acc, [a, b]) => acc + (b - a), 0);
+    return done + (store.timer.running ? Date.now() - store.timer.running : 0);
+  }
+
+  const hm = ms => { const m = Math.floor(ms / 60000); return `${Math.floor(m / 60)}h ${pad(m % 60)}m`; };
+  const hms = ms => { const s = Math.floor(ms / 1000); return `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`; };
+  const shortDur = ms => { const m = Math.round(ms / 60000); return m < 60 ? `${m}m` : hm(ms); };
+  const fDay = new Intl.DateTimeFormat('es', { weekday: 'narrow' });
+  const fShort = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' });
+  const fLong = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long' });
+  const fTime = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' });
+
+  // ---------- Guardado (en este teléfono) ----------
+  // Se guarda en cada acción, con marcas de tiempo reales: cerrar la app no pierde nada.
+  function saveLocal() {
+    localStorage.setItem(LS_KEY, JSON.stringify(store));   // si falla, lanza y se avisa
+  }
+  function normalizeTimer(t) {
+    return {
+      running: t.running || null,
+      segments: Array.isArray(t.segments) ? t.segments : [],
+      pauseStart: t.pauseStart || null,
+      goalHours: t.goalHours || 30,
+    };
+  }
+  function loadLocal() {
+    try {
+      const s = JSON.parse(localStorage.getItem(LS_KEY));
+      if (s && s.weeks) { store.weeks = s.weeks; store.timer = normalizeTimer({ ...store.timer, ...s.timer }); }
+    } catch {}
+  }
+  async function writeTimer() { saveLocal(); }
+  async function writeWeek() { saveLocal(); }
+  const failed = () => toast('No se pudo guardar en el teléfono. Revisa que no estés en modo privado.');
+
+  // ---------- Render ----------
+  function renderLive() {
+    const now = Date.now();
+    const ws = mondayOf(now).getTime();
+    const total = workedBetween(ws, addDays(ws, 7).getTime());
+    const m = Math.floor(total / 60000);
+    $('total').innerHTML = `${Math.floor(m / 60)}<small>h</small>${pad(m % 60)}<small>m</small>`;
+    const pct = Math.min(1, total / (store.timer.goalHours * 3600000));
+    $('meter').style.transform = `scaleX(${pct})`;
+    $('goalFact').innerHTML = `<b>${Math.round(pct * 100)}%</b> de ${store.timer.goalHours} h`;
+
+    // Comparación con la semana pasada hasta este mismo momento
+    const lastSame = workedBetween(ws - 7 * DAY, now - 7 * DAY);
+    const diff = total - lastSame;
+    $('vsFact').innerHTML = lastSame || total
+      ? `<b>${diff >= 0 ? '+' : '−'}${hm(Math.abs(diff))}</b> vs. semana pasada a esta hora`
+      : '';
+    const daysSoFar = Math.floor((now - ws) / DAY) + 1;
+    $('avgFact').innerHTML = total ? `<b>${hm(total / daysSoFar)}</b> promedio diario` : '';
+
+    $('fWeek').textContent = hm(total);
+    if (active()) {
+      const t = hms(currentElapsed());
+      $('fTime').textContent = t;
+      $('fPause').textContent = paused() && store.timer.pauseStart ? `Pausa: ${hms(now - store.timer.pauseStart)}` : '';
+      document.title = `${paused() ? '⏸ ' : ''}${t} · Semana de Foco`;
+    } else {
+      document.title = 'Semana de Foco';
+    }
+  }
+
+  function renderWeek() {
+    if (holdTimer) return;           // no interrumpir un "mantener para eliminar"
+    const ws = addDays(mondayOf(Date.now()), weekOffset * 7);
+    const we = addDays(ws, 7);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+
+    $('rangeTitle').textContent =
+      `${fShort.format(ws)} – ${fShort.format(addDays(ws, 6))} · ${hm(workedBetween(ws.getTime(), we.getTime()))}`;
+    $('next').disabled = weekOffset >= 0;
+    $('now').disabled = weekOffset === 0;
+
+    const vals = [];
+    for (let i = 0; i < 7; i++) {
+      const a = addDays(ws, i);
+      vals.push({ d: a, ms: workedBetween(a.getTime(), addDays(a, 1).getTime()) });
+    }
+    const max = Math.max(4 * 3600000, ...vals.map(v => v.ms));
+    $('days').innerHTML = vals.map(v => {
+      const m = Math.floor(v.ms / 60000);
+      const label = m < 1 ? '·' : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${pad(m % 60)}`;
+      return `<div class="day${v.d.getTime() === today.getTime() ? ' today' : ''}">
+        <span class="dval num">${label}</span>
+        <div class="bar"><div style="transform:scaleY(${v.ms / max})"></div></div>
+        <span class="dname">${fDay.format(v.d).toUpperCase()} ${v.d.getDate()}</span>
+      </div>`;
+    }).join('');
+
+    const list = allSessions()
+      .filter(s => overlap(s.start, s.end, ws.getTime(), we.getTime()) > 0)
+      .sort((a, b) => b.start - a.start);
+    $('count').textContent = list.length ? `${list.length} ${list.length === 1 ? 'sesión' : 'sesiones'}` : '';
+    $('sessions').innerHTML = list.length
+      ? list.map(s => {
+          const w = worked(s), pausedMs = (s.end - s.start) - w;
+          const extra = s.manual ? ' · manual' : pausedMs >= 60000 ? ` · pausa ${shortDur(pausedMs)}` : '';
+          return `<div class="row">
+          <div class="when"><span>${cap(fLong.format(new Date(s.start)))}</span>
+            <span class="num">${fTime.format(new Date(s.start))} – ${fTime.format(new Date(s.end))}${extra}</span></div>
+          <span class="dur num">${hm(w)}</span>
+          <button class="del press" data-id="${s.id}" aria-label="Mantén presionado para eliminar esta sesión">Borrar<span class="fill" aria-hidden="true">Borrar</span></button>
+        </div>`;
+        }).join('')
+      : `<div class="empty">${weekOffset === 0 ? 'Aún no hay sesiones esta semana. Toca “Empezar a trabajar”.' : 'Sin sesiones esa semana.'}</div>`;
+  }
+
+  function render() { renderLive(); renderWeek(); syncFocus(); }
+
+  // ---------- Modo foco ----------
+  let shownState = 'off';            // off | running | paused
+  function syncFocus() {
+    const state = !active() ? 'off' : paused() ? 'paused' : 'running';
+    if (state === shownState) return;
+    const was = shownState;
+    shownState = state;
+    const f = $('focus');
+    f.hidden = state === 'off';
+    f.classList.toggle('paused', state === 'paused');
+    $('fState').textContent = state === 'paused' ? 'En pausa' : 'Trabajando';
+    $('fPause').hidden = state !== 'paused';
+    $('pause').hidden = state !== 'running';
+    $('resume').hidden = state !== 'paused';
+    // Mientras hay sesión, la página de atrás no recibe foco ni se desplaza
+    document.querySelector('.app').inert = state !== 'off';
+    document.body.classList.toggle('locked', state !== 'off');
+
+    if (state === 'running') {
+      wake(); requestWakeLock();
+      $('pause').focus({ preventScroll: true });
+    } else if (state === 'paused') {
+      clearTimeout(idleTimer); f.classList.remove('idle');   // en pausa los controles quedan a la vista
+      $('resume').focus({ preventScroll: true });
+    } else {
+      if (was !== 'off') $('go').focus({ preventScroll: true });
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+    }
+  }
+  function wake() {
+    $('focus').classList.remove('idle');
+    clearTimeout(idleTimer);
+    if (!paused()) idleTimer = setTimeout(() => $('focus').classList.add('idle'), 3500);
+  }
+  async function requestWakeLock() {
+    try { if (navigator.wakeLock && !wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch {}
+  }
+  async function enterFullscreen(fromButton) {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    try {
+      if (!req || !(document.fullscreenEnabled || document.webkitFullscreenEnabled)) throw new Error();
+      await req.call(el);
+    } catch {
+      if (fromButton) toast('Para verla sin barras, instálala en tu pantalla de inicio.');
+    }
+  }
+  function syncFsButton() {
+    const b = $('fs'); if (b) b.hidden = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  async function start() {
+    if (active()) return;
+    store.timer = { ...store.timer, running: Date.now(), segments: [], pauseStart: null };
+    enterFullscreen(false);
+    render();
+    try { await writeTimer(); } catch { failed(); }
+  }
+
+  async function pause() {
+    if (!store.timer.running) return;
+    const now = Date.now();
+    store.timer.segments = [...store.timer.segments, [store.timer.running, now]];
+    store.timer.running = null;
+    store.timer.pauseStart = now;
+    render();
+    try { await writeTimer(); } catch { failed(); }
+  }
+
+  async function resume() {
+    if (!paused()) return;
+    store.timer.running = Date.now();
+    store.timer.pauseStart = null;
+    render();
+    try { await writeTimer(); } catch { failed(); }
+  }
+
+  async function stop() {
+    if (!active()) return;
+    const now = Date.now();
+    const segments = store.timer.running
+      ? [...store.timer.segments, [store.timer.running, now]]
+      : store.timer.segments;
+    store.timer = { ...store.timer, ...emptyTimer() };
+    render();
+    try {
+      const session = { id: newId(), start: segments[0][0], end: segments[segments.length - 1][1], segments };
+      const w = worked(session);
+      if (w >= MIN_SESSION) {
+        const key = weekKey(session.start);
+        store.weeks[key] = [...(store.weeks[key] || []), session];
+        await writeWeek(key);
+        toast(`Sesión guardada: ${hm(w)} de trabajo`);
+      }
+      await writeTimer();
+    } catch { failed(); }
+    weekOffset = 0;
+    render();
+  }
+
+  async function removeSession(id) {
+    const key = Object.keys(store.weeks).find(k => store.weeks[k].some(s => s.id === id));
+    if (!key) return;
+    const removed = store.weeks[key].find(s => s.id === id);
+    store.weeks[key] = store.weeks[key].filter(s => s.id !== id);
+    render();
+    try {
+      await writeWeek(key);
+      toast(`Sesión de ${hm(worked(removed))} eliminada`, 'Deshacer', async () => {
+        store.weeks[key] = [...(store.weeks[key] || []), removed];
+        render();
+        try { await writeWeek(key); toast('Sesión recuperada'); } catch { failed(); }
+      });
+    } catch { failed(); }
+  }
+
+  const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+
+  let toastTimer;
+  // Aviso breve; con acción opcional (p. ej. Deshacer), que se queda más tiempo
+  function toast(msg, actionLabel, action) {
+    const t = $('toast');
+    t.hidden = true; void t.offsetWidth;   // reinicia la entrada si ya estaba visible
+    t.replaceChildren(document.createTextNode(msg));
+    if (actionLabel) {
+      const b = document.createElement('button');
+      b.textContent = actionLabel;
+      b.onclick = () => { t.hidden = true; clearTimeout(toastTimer); action(); };
+      t.append(b);
+    }
+    t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, actionLabel ? 6000 : 3000);
+  }
+
+  // ---------- Eventos ----------
+  $('go').onclick = start;
+  $('pause').onclick = e => { e.stopPropagation(); pause(); };
+  $('resume').onclick = e => { e.stopPropagation(); resume(); };
+  $('stop').onclick = e => { e.stopPropagation(); stop(); };
+  $('fs').onclick = e => { e.stopPropagation(); enterFullscreen(true); };
+  document.addEventListener('fullscreenchange', syncFsButton);
+  document.addEventListener('webkitfullscreenchange', syncFsButton);
+  ['pointerdown', 'pointermove', 'keydown'].forEach(ev => $('focus').addEventListener(ev, wake));
+
+  $('prev').onclick = () => { weekOffset--; renderWeek(); };
+  $('next').onclick = () => { if (weekOffset < 0) weekOffset++; renderWeek(); };
+  $('now').onclick = () => { weekOffset = 0; renderWeek(); };
+
+  // Mantener presionado "Borrar" para eliminar; soltar antes cancela
+  function cancelHold() {
+    clearTimeout(holdTimer); holdTimer = null;
+    document.querySelectorAll('.del.holding').forEach(b => b.classList.remove('holding'));
+  }
+  $('sessions').addEventListener('pointerdown', e => {
+    const btn = e.target.closest('.del');
+    if (!btn) return;
+    btn.setPointerCapture?.(e.pointerId);
+    btn.classList.add('holding');
+    const id = btn.dataset.id;
+    holdTimer = setTimeout(() => { holdTimer = null; btn.classList.remove('holding'); removeSession(id); }, HOLD_MS);
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev =>
+    $('sessions').addEventListener(ev, () => { if (holdTimer) { cancelHold(); toast('Mantén presionado para borrar'); } }));
+  $('sessions').addEventListener('contextmenu', e => { if (e.target.closest('.del')) e.preventDefault(); });
+  // Teclado: Enter/Espacio borran directo (detail === 0 = clic sin puntero); queda "Deshacer"
+  $('sessions').addEventListener('click', e => {
+    const btn = e.target.closest('.del');
+    if (btn && e.detail === 0) removeSession(btn.dataset.id);
+  });
+
+  const today = new Date();
+  $('mDate').value = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  $('manual').onsubmit = async e => {
+    e.preventDefault();
+    const [y, mo, d] = $('mDate').value.split('-').map(Number);
+    const at = t => { const [h, m] = t.split(':').map(Number); return new Date(y, mo - 1, d, h, m).getTime(); };
+    const s = at($('mStart').value);
+    let en = at($('mEnd').value);
+    if (en <= s) en += DAY; // pasó la medianoche
+    if (en > Date.now()) { toast('La sesión no puede terminar en el futuro.'); return; }
+    const key = weekKey(s);
+    store.weeks[key] = [...(store.weeks[key] || []), { id: newId(), start: s, end: en, segments: [[s, en]], manual: true }];
+    weekOffset = Math.round((mondayOf(s) - mondayOf(Date.now())) / (7 * DAY));
+    $('mStart').value = ''; $('mEnd').value = '';
+    render();
+    try { await writeWeek(key); toast(`Agregada: ${hm(en - s)}`); } catch { failed(); }
+  };
+
+  $('goalForm').onsubmit = async e => {
+    e.preventDefault();
+    const v = Math.round(Number($('goal').value));
+    if (!(v > 0 && v <= 100)) { $('goal').value = store.timer.goalHours; return; }
+    store.timer.goalHours = v;
+    render();
+    try { await writeTimer(); toast(`Meta: ${v} horas por semana`); } catch { failed(); }
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      if (store.timer.running) { wakeLock = null; requestWakeLock(); }
+      render();
+    }
+  });
+
+  // ---------- Respaldo ----------
+  // Descargar: en el celular abre el menú de compartir (Archivos, Drive, WhatsApp…)
+  $('exportBtn').onclick = async () => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const name = `semana-de-foco-${stamp}.json`;
+    const file = new File([JSON.stringify(store, null, 2)], name, { type: 'application/json' });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Respaldo Semana de Foco' });
+        return;
+      }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file); a.download = name;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+
+  let pendingImport = null;
+  $('importBtn').onclick = () => $('importFile').click();
+  $('importFile').onchange = async e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (!data || typeof data.weeks !== 'object') throw new Error();
+      pendingImport = data;
+      const n = Object.values(data.weeks).flat().length;
+      $('confirmText').textContent = `El respaldo tiene ${n} ${n === 1 ? 'sesión' : 'sesiones'}. Reemplaza lo que hay en el teléfono.`;
+      $('confirmImport').hidden = false;
+    } catch { toast('Ese archivo no es un respaldo de Semana de Foco.'); }
+  };
+  $('confirmNo').onclick = () => { pendingImport = null; $('confirmImport').hidden = true; };
+  $('confirmYes').onclick = () => {
+    if (!pendingImport) return;
+    store.weeks = pendingImport.weeks;
+    store.timer = normalizeTimer({ ...emptyTimer(), ...(pendingImport.timer || {}) });
+    pendingImport = null; $('confirmImport').hidden = true;
+    $('goal').value = store.timer.goalHours;
+    try { saveLocal(); toast('Respaldo restaurado'); } catch { failed(); }
+    render();
+  };
+
+  // ---------- Arranque ----------
+  loadLocal();
+  $('today').textContent = cap(fLong.format(today));
+  $('goal').value = store.timer.goalHours;
+  $('storeHint').textContent = 'Tus sesiones se guardan en este teléfono. Descarga un respaldo de vez en cuando por si cambias de celular.';
+
+  // Instalada en la pantalla de inicio ya abre sin barras: el botón sobra
+  const standalone = matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches || navigator.standalone === true;
+  if (standalone) $('fs').remove();
+
+  render();
+  setInterval(renderLive, 1000);
+  setInterval(renderWeek, 30000);
+
+  // Si la app está abierta en otra pestaña, mantener ambas al día
+  window.addEventListener('storage', e => { if (e.key === LS_KEY) { loadLocal(); render(); } });
+
+  // Pedir al sistema que no borre los datos para liberar espacio
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch {}
+
+  // Funciona sin internet una vez abierta
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
